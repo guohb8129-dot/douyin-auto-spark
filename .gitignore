@@ -1,0 +1,6 @@
+# 登录态与运行产物
+profile/
+logs/
+.venv/
+config.json
+__pycache__/
