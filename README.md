@@ -74,6 +74,7 @@ powershell -ExecutionPolicy Bypass -File install_task.ps1
 common.py            浏览器启动、登录态判定、日志、告警
 login.py             一次性扫码登录
 spark.py             定时发送主程序
+probe.py             私信页 DOM 探测（改版排查用）
 config.example.json  配置模板
 setup.ps1            一键安装
 install_task.ps1     注册 Windows 每日计划任务
@@ -94,6 +95,12 @@ logs/                运行日志与失败现场（自动生成）
 
 定位失败时 `logs/` 会保存现场截图与 HTML，据此更新 `spark.py` 顶部的
 `INPUT_SELECTORS` / `SEND_SELECTORS` / `HEADER_SELECTORS`。
+
+也可以直接跑探测脚本，打印当前页面的真实结构：
+
+```powershell
+.venv\Scripts\python.exe probe.py
+```
 
 ## 常见问题
 
