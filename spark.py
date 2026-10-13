@@ -22,9 +22,11 @@ from common import (
     CHAT_URL,
     CONFIG_PATH,
     LOG_DIR,
+    clear_config_alert,
     is_logged_in,
     launch,
     log,
+    notify_config_error,
     notify_login_lost,
 )
 
@@ -65,14 +67,53 @@ RATE_LIMIT_SELECTORS = (
 )
 
 
+# 非半角标点：出现在 JSON 结构位置就会让文件解析失败。
+BAD_PUNCT = {
+    "\uff0c": "全角逗号", "\uff1a": "全角冒号", "\uff1b": "全角分号",
+    "\u201c": "中文左引号", "\u201d": "中文右引号",
+    "\uff08": "全角左括号", "\uff09": "全角右括号",
+    "\u3010": "全角左方括号", "\u3011": "全角右方括号",
+    "\uff1d": "全角等号", "\u3002": "中文句号",
+}
+
+
+class ConfigError(Exception):
+    """配置无法加载，附带可操作的修复说明。"""
+
+
+def _diagnose_json_error(raw: str, exc: Exception) -> str:
+    """把 JSONDecodeError 转成带行号与可疑标点的说明。"""
+    msg = str(exc)
+    for ch, name in BAD_PUNCT.items():
+        if ch in raw:
+            line = next((i for i, ln in enumerate(raw.splitlines(), 1) if ch in ln), 0)
+            return f"{msg}\n第 {line} 行出现{name}「{ch}」，JSON 只接受半角标点。"
+    return msg
+
+
 def load_config() -> dict:
     if not CONFIG_PATH.is_file():
-        raise SystemExit(f"缺少配置文件：{CONFIG_PATH}")
-    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        raise ConfigError(f"缺少配置文件：{CONFIG_PATH}")
+    raw = CONFIG_PATH.read_text(encoding="utf-8")
+    try:
+        cfg = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(_diagnose_json_error(raw, exc)) from exc
     if not cfg.get("targets"):
-        raise SystemExit("config.json 里的 targets 为空，请填写好友昵称。")
+        raise ConfigError("config.json 里的 targets 为空，请填写好友昵称。")
     if not cfg.get("messages"):
-        raise SystemExit("config.json 里的 messages 为空，请填写至少一条消息。")
+        raise ConfigError("config.json 里的 messages 为空，请填写至少一条消息。")
+    return cfg
+
+
+def load_config_or_alert() -> dict | None:
+    """配置有问题时告警并返回 None，避免静默失败。"""
+    try:
+        cfg = load_config()
+    except ConfigError as exc:
+        notify_config_error(str(exc))
+        return None
+    clear_config_alert()
     return cfg
 
 
@@ -350,7 +391,9 @@ def main() -> None:
     ap.add_argument("--list", action="store_true", help="列出会话，确认好友昵称")
     args = ap.parse_args()
 
-    cfg = load_config()
+    cfg = load_config_or_alert()
+    if cfg is None:
+        sys.exit(1)
 
     if args.list:
         list_conversations(cfg)

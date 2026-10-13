@@ -53,45 +53,82 @@ def log(msg: str) -> None:
 
 DESKTOP = Path.home() / "Desktop"
 ALERT_FILE = DESKTOP / "抖音续火花-需要重新登录.txt"
+CONFIG_ALERT_FILE = DESKTOP / "抖音续火花-配置有误.txt"
 
-# 隐藏窗口运行的一次性通知脚本（WinRT Toast，零额外依赖）。
-_TOAST_PS = (
-    "$ErrorActionPreference='SilentlyContinue';"
-    "[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime];"
-    "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent("
-    "[Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
-    "$x=$t.GetElementsByTagName('text');"
-    "$x.Item(0).AppendChild($t.CreateTextNode('抖音续火花')) > $null;"
-    "$x.Item(1).AppendChild($t.CreateTextNode('登录态已失效，续火花已暂停。请重新扫码。')) > $null;"
-    "$n=[Windows.UI.Notifications.ToastNotification]::new($t);"
-    "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('DouyinSpark').Show($n)"
-)
+
+def _toast(message: str) -> None:
+    """弹一条 Windows 通知（WinRT Toast，零额外依赖）。"""
+    # PowerShell 单引号字符串里，单引号自身需要写成两个。
+    safe = message.replace("'", "''")
+    ps = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime];"
+        "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent("
+        "[Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+        "$x=$t.GetElementsByTagName('text');"
+        "$x.Item(0).AppendChild($t.CreateTextNode('抖音续火花')) > $null;"
+        f"$x.Item(1).AppendChild($t.CreateTextNode('{safe}')) > $null;"
+        "$n=[Windows.UI.Notifications.ToastNotification]::new($t);"
+        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('DouyinSpark').Show($n)"
+    )
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                   timeout=20, capture_output=True)
+
+
+def _alert(path: Path, toast_msg: str, body: str) -> None:
+    """需人工介入的故障：写桌面告警文件，并尽力弹一条系统通知。"""
+    try:
+        path.write_text(body, encoding="utf-8")
+    except Exception as exc:
+        log(f"写告警文件失败：{exc}")
+    try:
+        _toast(toast_msg)
+    except Exception as exc:
+        log(f"弹窗通知失败（已写桌面文件）：{exc}")
 
 
 def notify_login_lost() -> None:
-    """登录态失效需人工介入：写桌面告警文件，并尽力弹一条 Windows 通知。"""
     log("登录态已失效，需要重新扫码。")
-    try:
-        ALERT_FILE.write_text(
-            f"时间：{_dt.datetime.now():%Y-%m-%d %H:%M}\n"
-            f"抖音登录态已失效，自动续火花已暂停（登录成功后本文件会自动删除）。\n\n"
-            f"请运行以下命令重新扫码：\n"
-            f'  cd "{ROOT}"\n'
-            f"  .venv\\Scripts\\python.exe login.py\n",
-            encoding="utf-8",
-        )
-    except Exception as exc:
-        log(f"写桌面告警文件失败：{exc}")
-    try:
-        subprocess.run(["powershell", "-NoProfile", "-Command", _TOAST_PS],
-                       timeout=20, capture_output=True)
-    except Exception as exc:
-        log(f"弹窗通知失败（已写桌面文件）：{exc}")
+    _alert(
+        ALERT_FILE,
+        "登录态已失效，续火花已暂停。请重新扫码。",
+        f"时间：{_dt.datetime.now():%Y-%m-%d %H:%M}\n"
+        f"抖音登录态已失效，自动续火花已暂停（登录成功后本文件会自动删除）。\n\n"
+        f"请运行以下命令重新扫码：\n"
+        f'  cd "{ROOT}"\n'
+        f"  .venv\\Scripts\\python.exe login.py\n",
+    )
+
+
+def notify_config_error(detail: str) -> None:
+    """配置无法解析时告警。它在发送流程之前发生，否则会静默失败。"""
+    log(f"配置文件有误，本轮未发送：{detail}")
+    _alert(
+        CONFIG_ALERT_FILE,
+        "config.json 有误，续火花已暂停。请检查标点。",
+        f"时间：{_dt.datetime.now():%Y-%m-%d %H:%M}\n"
+        f"config.json 解析失败，自动续火花已暂停（改好后本文件会自动删除）。\n\n"
+        f"错误：{detail}\n\n"
+        f"最常见的原因：编辑时用了中文输入法，打出了全角标点，\n"
+        f"例如全角逗号 ， 、中文引号 “ ” 、全角冒号 ： 。\n"
+        f"JSON 只接受半角标点： , \" :\n\n"
+        f"请检查该文件：\n  {CONFIG_PATH}\n\n"
+        f"改完自检：\n"
+        f'  cd "{ROOT}"\n'
+        f"  .venv\\Scripts\\python.exe -c \"import json;print(json.load(open('config.json',encoding='utf-8'))['targets'])\"\n",
+    )
 
 
 def clear_login_alert() -> None:
     try:
         ALERT_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def clear_config_alert() -> None:
+    try:
+        CONFIG_ALERT_FILE.unlink(missing_ok=True)
     except Exception:
         pass
 
