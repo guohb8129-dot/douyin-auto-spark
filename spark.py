@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 douyin-auto-spark contributors
 """抖音续火花 —— 每天定时给指定好友发一条私信。
 
 用法：

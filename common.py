@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 douyin-auto-spark contributors
 """抖音续火花自动化 —— 公共模块：浏览器启动、登录态判定、日志。
 
 用真实 Chrome + 持久化用户目录启动，既保留登录态，又避免 headless 被抖音

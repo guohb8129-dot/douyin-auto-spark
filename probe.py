@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 douyin-auto-spark contributors
 """抖音网页版私信页 DOM 探测工具。
 
 抖音改版导致发送失败时，用它打印聊天页的真实结构，

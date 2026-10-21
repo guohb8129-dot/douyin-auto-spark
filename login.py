@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 douyin-auto-spark contributors
 """一次性扫码登录。
 
 登录态保存在 profile/ 目录，之后 spark.py 直接复用；一般可维持数周，

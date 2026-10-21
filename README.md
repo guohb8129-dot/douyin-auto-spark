@@ -151,4 +151,12 @@ logs/                运行日志与失败现场（自动生成）
 
 ## License
 
-[MIT](LICENSE)
+[GNU General Public License v3.0](LICENSE)（GPL-3.0-or-later）
+
+Copyright (C) 2026 douyin-auto-spark contributors
+
+本程序是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证第三版
+（或你选择的任何更新版本）的条款重新分发和/或修改它。
+分发时须随附完整源代码与本许可证副本，且不提供任何担保。
+
+先前以 MIT 协议发布的版本，其授权不因本次变更而撤回。
