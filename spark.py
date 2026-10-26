@@ -60,6 +60,9 @@ LIST_SELECTORS = (
 )
 # 风控提示只会出现在弹窗/浮层里。绝不能扫全页文本——会话预览里也可能出现同类词。
 RATE_LIMIT_MARKERS = ("操作频繁", "安全验证", "请完成验证", "发送过于频繁", "稍后再试")
+# 会话列表懒加载：最多滚动次数，足以加载出几十条历史会话。
+LIST_MAX_SCROLLS = 12
+
 RATE_LIMIT_SELECTORS = (
     '[class*="toast"]',
     '[role="alert"]',
@@ -173,19 +176,19 @@ def open_chat(page: Page, target: str) -> bool:
         notify_login_lost()
         return False
 
-    # 1) 先在最近会话列表里点
-    loc = page.get_by_text(target, exact=True)
-    if loc.count() > 0:
-        try:
-            loc.first.click(timeout=5000)
-            page.wait_for_timeout(1500)
-            if _header_matches(page, target):
-                return True
-            log(f"点击“{target}”后标题不匹配，改用搜索兜底。")
-        except Exception as exc:
-            log(f"列表点击失败：{exc}")
+    # 1) 当前可见的会话列表
+    if _click_in_list(page, target):
+        return True
 
-    # 2) 搜索兜底
+    # 2) 会话列表懒加载：目标在后面时需要滚动才会渲染出来
+    for i in range(LIST_MAX_SCROLLS):
+        if not _scroll_list(page):
+            break
+        if _click_in_list(page, target):
+            log(f"滚动 {i + 1} 次后在列表中找到“{target}”。")
+            return True
+
+    # 3) 搜索兜底
     box = page.locator('input[placeholder*="搜索"]').first
     if box.count() > 0:
         try:
@@ -204,6 +207,36 @@ def open_chat(page: Page, target: str) -> bool:
     log(f"找不到会话“{target}”（或无法确认切换成功）。")
     dump_debug(page, "cant-open-chat")
     return False
+
+
+def _click_in_list(page: Page, target: str) -> bool:
+    """在已渲染的会话列表里点击目标，并确认右侧标题已切换。"""
+    loc = page.get_by_text(target, exact=True)
+    try:
+        if loc.count() == 0:
+            return False
+        loc.first.click(timeout=5000)
+        page.wait_for_timeout(1500)
+        if _header_matches(page, target):
+            return True
+        log(f"点击“{target}”后标题不匹配，继续查找。")
+    except Exception as exc:
+        log(f"列表点击失败：{exc}")
+    return False
+
+
+def _scroll_list(page: Page) -> bool:
+    """向下滚动会话列表触发懒加载；内容不再增长时返回 False。"""
+    try:
+        before = page.evaluate("() => document.body.innerText.length")
+        page.mouse.move(150, 500)
+        page.mouse.wheel(0, 800)
+        page.wait_for_timeout(1200)
+        after = page.evaluate("() => document.body.innerText.length")
+        return after > before
+    except Exception as exc:
+        log(f"滚动会话列表失败：{exc}")
+        return False
 
 
 def _header_matches(page: Page, target: str) -> bool:
